@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Restaurant Map</title>
+<link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet"/>
+<script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=cabinet-grotesk@800,900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:'Satoshi','Helvetica Neue',sans-serif;background:#f7f6f2;color:#28251d}
+img{display:block;max-width:100%}
+button{cursor:pointer;background:none;border:none;font:inherit;color:inherit}
+a{color:inherit}
+
+:root{
+  --red:#e63329;--red2:#c2221a;
+  --bg:#f7f6f2;--surface:#f9f8f5;
+  --divider:#dcd9d5;--border:#d4d1ca;
+  --muted:#7a7974;--faint:#bab9b4;
+  --rf:9999px;--rlg:.75rem;
+  --ease:180ms cubic-bezier(.16,1,.3,1);
+  --display:'Cabinet Grotesk','Helvetica Neue',sans-serif;
+}
+
+/* ── APP SHELL ── */
+body{display:flex;flex-direction:column}
+
+.hero{
+  flex-shrink:0;
+  background:#1a1a1a;color:#fff;
+  padding:1.25rem 2rem;
+}
+.eyebrow{font-size:.6rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--red);margin-bottom:.2rem}
+.hero h1{font-family:var(--display);font-size:clamp(1.2rem,2.5vw,1.9rem);font-weight:900;line-height:1.1;letter-spacing:-.03em}
+.hero-sub{font-size:.7rem;color:rgba(255,255,255,.45);margin-top:.25rem}
+.hero-sub strong{color:rgba(255,255,255,.8)}
+
+/* ── MAIN GRID ── */
+.main{
+  flex:1;
+  min-height:0;        /* CRITICAL for scroll to work */
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  overflow:hidden;
+}
+
+/* ── LIST PANEL ── */
+.list{
+  overflow-y:auto;
+  overflow-x:hidden;
+  height:100%;
+  padding:1.5rem 1.25rem;
+  background:var(--bg);
+  -webkit-overflow-scrolling:touch;
+}
+
+/* ── MAP PANEL ── */
+.map-col{display:flex;flex-direction:column;height:100%;background:#e0ddd8;overflow:hidden}
+
+.sbar{
+  flex-shrink:0;display:flex;gap:.35rem;align-items:center;
+  padding:.4rem .75rem;background:rgba(255,255,255,.94);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--divider);
+  overflow-x:auto;scrollbar-width:none;white-space:nowrap;
+}
+.sbar::-webkit-scrollbar{display:none}
+.sbar label{font-size:.58rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-right:.15rem;flex-shrink:0}
+.sbtn{font-size:.62rem;font-weight:600;padding:3px .55rem;border-radius:var(--rf);border:1.5px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;transition:all var(--ease);flex-shrink:0}
+.sbtn:hover{border-color:var(--red);color:var(--red)}
+.sbtn.on{background:var(--red);border-color:var(--red);color:#fff}
+#map{flex:1;min-height:0}
+.maplibregl-ctrl-attrib{font-size:9px!important}
+
+/* ── CARDS ── */
+.card{padding:1.25rem 0;border-bottom:1px solid var(--divider);cursor:pointer}
+.card:last-of-type{border-bottom:none}
+.ch{display:grid;grid-template-columns:32px 1fr;gap:.7rem;align-items:start}
+.num{
+  width:32px;height:32px;border-radius:var(--rf);
+  background:#28251d;color:#fff;
+  font-family:var(--display);font-size:.75rem;font-weight:900;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-top:3px;
+  transition:background var(--ease),transform var(--ease);
+}
+.card.on .num{background:var(--red);transform:scale(1.1)}
+.hood{font-size:.58rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--red);margin-bottom:.15rem}
+.cname{font-family:var(--display);font-size:clamp(.95rem,1.3vw,1.2rem);font-weight:800;line-height:1.2;letter-spacing:-.02em;transition:color var(--ease)}
+.card:hover .cname{color:var(--red)}
+.cphoto{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:var(--rlg);margin:.7rem 0;border:1px solid var(--divider)}
+.cdesc{font-size:.78rem;color:var(--muted);line-height:1.65;max-width:50ch}
+.ctags{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.55rem}
+.ctag{font-size:.58rem;font-weight:600;background:#fff;border:1px solid var(--border);border-radius:var(--rf);padding:2px .55rem;color:var(--muted)}
+.clinks{display:flex;gap:.5rem;margin-top:.8rem;flex-wrap:wrap}
+.cl{display:inline-flex;align-items:center;gap:.3rem;font-size:.62rem;font-weight:700;padding:4px .75rem;border-radius:var(--rf);text-decoration:none;transition:all var(--ease)}
+.cl svg{width:10px;height:10px;flex-shrink:0}
+.cl-p{background:var(--red);color:#fff;border:1.5px solid var(--red)}
+.cl-p:hover{background:var(--red2);border-color:var(--red2)}
+.cl-s{color:#28251d;border:1.5px solid var(--border)}
+.cl-s:hover{border-color:var(--red);color:var(--red)}
+.list-end{padding:2.5rem 0;text-align:center;color:var(--faint);font-size:.78rem}
+
+/* ── LOADING / ERROR ── */
+.state{padding:2rem 0;display:flex;align-items:center;gap:.6rem;color:var(--muted);font-size:.82rem}
+.spin{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err{padding:1.25rem;background:#fff3f3;border:1px solid #fcc;border-radius:var(--rlg);color:var(--red);font-size:.78rem;line-height:1.6;margin-top:.5rem}
+
+/* ── MARKERS ── */
+.pin{width:28px;height:28px;border-radius:50% 50% 50% 0;background:var(--red);transform:rotate(-45deg);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s,transform .15s}
+.pin.on{background:#1a1a1a;transform:rotate(-45deg) scale(1.25)}
+.plbl{transform:rotate(45deg);color:#fff;font-size:9px;font-weight:700;pointer-events:none;line-height:1}
+
+/* ── POPUP ── */
+.maplibregl-popup-content{padding:0!important;border-radius:var(--rlg)!important;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.15)!important;width:190px}
+.maplibregl-popup-tip{display:none}
+.pi{width:100%;height:95px;object-fit:cover;display:block}
+.pb{padding:.55rem .7rem .7rem}
+.pnum{font-size:.58rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--red)}
+.ptitle{font-family:var(--display);font-size:.85rem;font-weight:800;line-height:1.2}
+.phood{font-size:.62rem;color:var(--muted);margin-top:1px}
+.pgm{display:inline-flex;align-items:center;gap:3px;margin-top:.35rem;font-size:.62rem;font-weight:700;color:var(--red);text-decoration:none}
+.pgm:hover{text-decoration:underline}
+
+/* ── MOBILE ── */
+@media(max-width:600px){
+  body{overflow:auto}
+  .main{grid-template-columns:1fr;grid-template-rows:55vw 1fr;overflow:visible;flex:none}
+  .map-col{order:-1;height:55vw}
+  .list{height:auto;overflow-y:visible}
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="eyebrow">Maps</div>
+  <h1 id="h1">Loading…</h1>
+  <div class="hero-sub" id="sub"></div>
+</div>
+
+<div class="main">
+  <div class="list" id="list">
+    <div class="state"><div class="spin"></div>Loading restaurants…</div>
+  </div>
+  <div class="map-col">
+    <div class="sbar">
+      <label>Style</label>
+      <button class="sbtn on" data-s="liberty">Liberty</button>
+      <button class="sbtn" data-s="bright">Bright</button>
+      <button class="sbtn" data-s="positron">Positron</button>
+      <button class="sbtn" data-s="dark">Dark</button>
+      <button class="sbtn" data-s="streets">Streets</button>
+      <button class="sbtn" data-s="satellite">Satellite</button>
+    </div>
+    <div id="map"></div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// CONFIG
+// ================================================================
+const CFG = {
+  SITE:   'https://jellyfish-dahlia-gx8r.squarespace.com',
+  SLUG:   'restaurants',
+  PASS:   '123',
+  CENTER: [55.2200, 25.1740],
+  ZOOM:   11,
+  TITLE:  'The Essential Dubai Restaurant Guide',
+  DATE:   'April 2026',
+  FALLBACK: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80',
+};
+// ================================================================
+
+const PIN_SVG  = `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>`;
+const GLOB_SVG = `<svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10 15 15 0 0 1 4-10z"/></svg>`;
+
+document.getElementById('h1').textContent = CFG.TITLE;
+
+// ── BACKEND: Fetch from Squarespace JSON feed ──────────────────
+async function fetchLocs() {
+  try {
+    // Append site password so the feed is accessible during trial
+    const url = `${CFG.SITE}/${CFG.SLUG}?format=json&count=200&password=${CFG.PASS}`;
+    const res = await fetch(url, { credentials: 'include' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    return (data.items || []).map(parseLoc);
+  } catch(e) {
+    document.getElementById('list').innerHTML =
+      `<div class="err"><strong>⚠️ Could not load restaurants</strong><br><br>${e.message}<br><br>Check that the blog slug is <strong>${CFG.SLUG}</strong> and your posts are published.</div>`;
+    return [];
+  }
+}
+
+function parseLoc(post, i) {
+  // Client stores JSON in a code block inside post body
+  let m = {};
+  const body = post.body || '';
+  const match = body.match(/\{[^<>]*?"lat"[^<>]*?\}/s);
+  if (match) { try { m = JSON.parse(match[0]); } catch(e){} }
+
+  let photo = CFG.FALLBACK;
+  if (post.assetUrl) photo = post.assetUrl;
+  else if (post.mainImage?.assetUrl) photo = post.mainImage.assetUrl;
+
+  const desc = (m.description || post.excerpt || body)
+    .replace(/<[^>]*>/g,'').replace(/\{[\s\S]*?\}/g,'').trim().slice(0,200);
+
+  return {
+    id: i+1,
+    name: post.title || `Location ${i+1}`,
+    hood: m.neighborhood || (post.categories||[])[0] || '',
+    desc,
+    tags: m.tags || post.tags || [],
+    photo,
+    website: m.website || post.fullUrl || '#',
+    gmaps: m.gmaps || `https://maps.google.com/?q=${encodeURIComponent(post.title||'')}`,
+    lat: parseFloat(m.lat) || CFG.CENTER[1],
+    lng: parseFloat(m.lng) || CFG.CENTER[0],
+  };
+}
+
+// ── MAP SETUP ─────────────────────────────────────────────────
+const VS = {
+  liberty:  'https://tiles.openfreemap.org/styles/liberty',
+  bright:   'https://tiles.openfreemap.org/styles/bright',
+  positron: 'https://tiles.openfreemap.org/styles/positron',
+};
+const RS = {
+  dark:      'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+  streets:   'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+};
+const rStyle = u => ({version:8,sources:{r:{type:'raster',tiles:[u],tileSize:256}},layers:[{id:'r',type:'raster',source:'r'}],glyphs:'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf'});
+
+const map = new maplibregl.Map({
+  container: 'map',
+  style: VS.liberty,
+  center: CFG.CENTER,
+  zoom: CFG.ZOOM,
+});
+map.addControl(new maplibregl.NavigationControl(),'top-right');
+map.scrollZoom.disable();
+
+let curS = 'liberty';
+document.querySelectorAll('.sbtn').forEach(b => b.addEventListener('click', () => {
+  const s = b.dataset.s;
+  if (s === curS) return;
+  curS = s;
+  map.setStyle(VS[s] || rStyle(RS[s]));
+  map.once('styledata', rebuildPins);
+  document.querySelectorAll('.sbtn').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+}));
+
+// ── MARKERS ───────────────────────────────────────────────────
+const PINS = {};
+let pop = null, cur = null, locs = [];
+
+function mkPin(loc, isOn) {
+  const el = document.createElement('div');
+  el.innerHTML = `<div class="pin${isOn?' on':''}"><span class="plbl">${loc.id}</span></div>`;
+  return el.firstElementChild;
+}
+
+function rebuildPins() {
+  Object.values(PINS).forEach(m => m.remove());
+  locs.forEach(loc => {
+    const el = mkPin(loc, loc.id === cur);
+    el.addEventListener('click', () => jumpToCard(loc.id));
+    PINS[loc.id] = new maplibregl.Marker({element:el,anchor:'bottom'})
+      .setLngLat([loc.lng, loc.lat]).addTo(map);
+  });
+}
+
+function showPop(loc) {
+  if (pop) pop.remove();
+  pop = new maplibregl.Popup({closeButton:false,offset:30,maxWidth:'190px'})
+    .setLngLat([loc.lng, loc.lat])
+    .setHTML(`
+      <img class="pi" src="${loc.photo}" onerror="this.style.display='none'" alt="">
+      <div class="pb">
+        <div class="pnum">#${loc.id}</div>
+        <div class="ptitle">${loc.name}</div>
+        <div class="phood">${loc.hood}</div>
+        <a href="${loc.gmaps}" target="_blank" class="pgm">${PIN_SVG} Google Maps</a>
+      </div>`)
+    .addTo(map);
+}
+
+function setActive(id) {
+  if (cur === id) return;
+  cur = id;
+  // Update card highlights
+  document.querySelectorAll('#list .card').forEach(c =>
+    c.classList.toggle('on', +c.dataset.id === id));
+  // Update pin styles
+  locs.forEach(loc => {
+    const el = mkPin(loc, loc.id === id);
+    el.addEventListener('click', () => jumpToCard(loc.id));
+    PINS[loc.id]?.setElement(el);
+  });
+  const loc = locs.find(l => l.id === id);
+  if (!loc) return;
+  map.flyTo({center:[loc.lng, loc.lat], zoom:15, duration:800, essential:true});
+  showPop(loc);
+}
+
+// ── SCROLL TO CARD ────────────────────────────────────────────
+function jumpToCard(id) {
+  const panel = document.getElementById('list');
+  const card  = panel.querySelector(`.card[data-id="${id}"]`);
+  if (!card) return;
+  // offsetTop is relative to the panel — reliable in all browsers
+  panel.scrollTo({ top: card.offsetTop - panel.clientHeight * 0.2, behavior: 'smooth' });
+}
+
+// ── SCROLL DETECTION ─────────────────────────────────────────
+// Uses offsetTop (panel-relative) NOT getBoundingClientRect (viewport-relative)
+// This works correctly because the panel is the scroll container
+function setupScroll() {
+  const panel = document.getElementById('list');
+  panel.addEventListener('scroll', () => {
+    const cards = [...panel.querySelectorAll('.card')];
+    // The "target line" = 35% down from the top of the panel
+    const targetLine = panel.scrollTop + panel.clientHeight * 0.35;
+    let best = null, bestDist = Infinity;
+    cards.forEach(c => {
+      const cardMid = c.offsetTop + c.offsetHeight / 2;
+      const dist = Math.abs(cardMid - targetLine);
+      if (dist < bestDist) { bestDist = dist; best = c; }
+    });
+    if (best) setActive(+best.dataset.id);
+  }, { passive: true });
+}
+
+// ── BUILD CARDS ───────────────────────────────────────────────
+function buildCards() {
+  const panel = document.getElementById('list');
+  panel.innerHTML = '';
+  locs.forEach(loc => {
+    const c = document.createElement('div');
+    c.className = 'card';
+    c.dataset.id = loc.id;
+    c.innerHTML = `
+      <div class="ch">
+        <div class="num">${loc.id}</div>
+        <div><div class="hood">${loc.hood}</div><h2 class="cname">${loc.name}</h2></div>
+      </div>
+      <img class="cphoto" src="${loc.photo}" alt="${loc.name}" loading="lazy" onerror="this.style.display='none'">
+      <p class="cdesc">${loc.desc}</p>
+      <div class="ctags">${loc.tags.map(t=>`<span class="ctag">${t}</span>`).join('')}</div>
+      <div class="clinks">
+        <a href="${loc.website}" target="_blank" class="cl cl-p">${GLOB_SVG} Website</a>
+        <a href="${loc.gmaps}"   target="_blank" class="cl cl-s">${PIN_SVG} Google Maps</a>
+      </div>`;
+    c.addEventListener('click', () => setActive(loc.id));
+    panel.appendChild(c);
+  });
+  const end = document.createElement('div');
+  end.className = 'list-end';
+  end.textContent = '— End of list —';
+  panel.appendChild(end);
+}
+
+// ── INIT ──────────────────────────────────────────────────────
+async function init() {
+  locs = await fetchLocs();
+  if (!locs.length) return;
+
+  document.getElementById('h1').textContent  = CFG.TITLE;
+  document.getElementById('sub').innerHTML   = `Updated <strong>${CFG.DATE}</strong> &nbsp;·&nbsp; <strong>${locs.length} locations</strong>`;
+
+  buildCards();
+  setupScroll();
+
+  const go = () => { rebuildPins(); setActive(1); };
+  map.loaded() ? go() : map.on('load', go);
+}
+
+init();
+</script>
+</body>
+</html>
